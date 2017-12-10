@@ -2,9 +2,12 @@ from __future__ import division
 from data_utils import load_task
 import csv
 import numpy as np
-import torch
-from torch.autograd import Variable
-import torch.nn.functional as F
+
+from keras.models import Sequential
+from keras.layers.core import Dense, Dropout, Activation
+from keras.callbacks import EarlyStopping
+from keras.optimizers import SGD
+from keras.utils import np_utils
 
 
 W2VEC_LEN = 50
@@ -12,32 +15,23 @@ GLOVE_path = "./raw/glove.6B/glove.6B.50d.txt"
 _W2VEC = None
 miss = 0  #Total words which we cudnt find in GloVe
 
-class AnswerModule(torch.nn.Module):
-    def __init__(self, D=2*W2VEC_LEN, H1=200, H2=200, C=2):
-        """
-        @param D:  int - Features in each input example
-        @param H:  int - Hidden layer neurons
-        @param C: int -  No. of classes
-        """
-        super(AnswerModule, self).__init__()
-        torch.manual_seed(1)
-        D = 2 * W2VEC_LEN
-        C = 2
-        self.l1 = torch.nn.Linear(D, H1, bias=True)
-        self.l2 = torch.nn.Linear(H1, H2, bias=True)  
-        self.scores = torch.nn.Linear(H2, C, bias=True) 
+model = Sequential()
+def nn(X_train, y_train, X_test, y_test):
+	print X_train.shape
+	print y_train.shape
+	print X_test.shape
+	print y_test.shape
 
-    def forward(self, X):
-        h1 = self.l1(X).clamp(min=0)
-        h2 = self.l2(h1)
+	batch_size = 32
+	nb_epoch = 50
 
-        scores = self.scores(h2)
-        probs = F.softmax(scores)   #Numerically stable by using logexp trick
+	model.add(Dense(200, input_dim=2*W2VEC_LEN, activation='relu'))
+	model.add(Dense(200, activation='relu'))
+	model.add(Dense(2))
+	model.add(Activation('softmax'))
+	model.compile(loss='categorical_crossentropy', optimizer='adam')
 
-        return probs
-
-ans = AnswerModule(H1=200, H2=200)
-
+	model.fit(X_train, y_train, nb_epoch=nb_epoch, batch_size=batch_size, validation_data=(X_test, y_test)
 
 def fetch_data(path="./raw/", task_id = 6):
 	trn_data, tst_data = load_task(path, task_id)
@@ -111,33 +105,9 @@ def train_NN(X, y):
 	N = X.shape[0]
 	batch_sz = 32
 	epochs = 3
-	optimizer = torch.optim.Adam(params=ans.parameters())
     
-	itr = 0
-	for _ in xrange(epochs):
-	    idx = range(N)
-	    # sz = (sz+300 if sz+300<N else sz)   #Increasing batch size every epoch
-	    np.random.shuffle(idx)
-	    _X = X[idx,:]
-	    _y = y[idx,:]
-	    for st in range(0, N, batch_sz):
-	        end = st + batch_sz
-	        batch_X = Variable(torch.from_numpy(_X[st:end])).float()
-	        batch_y = Variable(torch.from_numpy(_y[st:end])).float()
-	        
-	        probs = ans(batch_X)
-	        log_loss = -1 * torch.sum(torch.log(probs) * batch_y)/N
-	        
-	        log_loss.backward()  #Computes gradients
-	        optimizer.step() #Updates weight params
-
-	        if itr in range(40, 80, 2):
-	        	print "Itr:", itr
-	        	print "IP:", _X[st:st+1]
-    	   		print "Probs:", probs.data.numpy()		
-
-    	   	itr += 1
-	    print "Epoch:", _, #": ", log_loss.data[0]
+	val_id = int(N*0.8)
+	nn(X[:val_id, :], y[:val_id, :], X[val_id:, :], y[val_id:,:])
 	    # print get_weights()
 
 def get_weights():
@@ -145,15 +115,8 @@ def get_weights():
 
 def predict(X):
 	N = X.shape[0]
-
-	_X = Variable(torch.from_numpy(X), requires_grad=False).float()
-	probs = ans(_X)
-	probs = probs.data.numpy()
-	# print probs.shape, probs[0:3,:]
-	# return
-	y_no = np.argmax(probs, axis=1)
-
-	return y_no, probs
+	y = model.predict(X)
+	return y
 
 def main():
 	#Fetch and Proprocess Data
