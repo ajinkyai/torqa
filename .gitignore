@@ -1,5 +1,5 @@
 #Project static files
-data/raw/glove.6B/glove.6B.50d.txt
+data/raw/glove.6B/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
