@@ -9,10 +9,11 @@ def parse_config():
     parser.add_argument("--max_hops", type=int, default=3)
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--max_epochs", type=int, default=100)
-    parser.add_argument("--lr", type=float, default=0.01)
+    parser.add_argument("--lr", type=float, default=0.04)
     parser.add_argument("--decay_interval", type=int, default=25)
     parser.add_argument("--decay_ratio", type=float, default=0.5)
     parser.add_argument("--max_clip", type=float, default=40.0)
+    parser.add_argument("--embedding_dim", type=int, default=20)
     return parser.parse_args()
 
 
