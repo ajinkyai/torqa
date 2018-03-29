@@ -1,3 +1,4 @@
+import pickle
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
@@ -101,7 +102,13 @@ class MemN2N(nn.Module):
 
 
 
-    def fit(self, train_data):
+    def fit(self, train_data, test_data=None):
+        self.train_data = train_data
+        self.test_data = test_data
+        epoch_test_acc = {}
+        epoch_train_acc = {}
+        epoch_loss = {}
+        epoch_lr = {}
         config = self.settings
         max_epochs = config['max_epochs']
         decay_interval = self.settings['decay_interval']
@@ -135,20 +142,30 @@ class MemN2N(nn.Module):
                 self.optim.zero_grad()
                 loss = self.ce_fn(self(story, query)[0], answer)
                 loss.backward()
+                epoch_loss[epoch] = loss.data[0]
                 nn.utils.clip_grad_norm(self.parameters(), 40.0)
 
                 self.optim.step()
+            epoch_lr[epoch] = self.scheduler.get_lr()[0]
             self.scheduler.step()
 
             if (epoch+1) % 10 == 0:
                 train_acc = self.tst(train_data)
-                print('epoch: {}, loss: {}, train acc: {}, lr:{}'.format(epoch+1, loss.data[0], train_acc, self.scheduler.get_lr()))
+                epoch_train_acc[epoch] = train_acc
+                if test_data:
+                    test_acc = self.tst(test_data)
+                    epoch_test_acc[epoch] = test_acc
+                print('epoch: {}, loss: {}, train acc: {}, test_acc: {}, lr:{}'.format(epoch+1, loss.data[0], train_acc, test_acc, self.scheduler.get_lr()))
+
+        save_params = epoch_test_acc, epoch_train_acc, epoch_loss, epoch_lr
+        pickle.dump(save_params, open("plotdata/save_params.p", "wb"))
         print(train_acc)
 
     def tst(self, data, train=False):
         correct = 0
         config = self.settings
         if not train:
+            self.test_data = data
             self.test_loader = DataLoader(data,
                                        batch_size=config['batch_size'],
                                        num_workers=1,
@@ -171,3 +188,20 @@ class MemN2N(nn.Module):
         acc = correct / len(loader.dataset)
         return acc
 
+
+    def get_story_from_idx(stories, word_idx):
+        word_idx[''] = 0
+        inv_map = {v: k for k, v in word_idx.items()}
+        result = []
+        for story in stories:
+            res_story = []
+            for sentence in story:
+                res_sent = []
+                for word in sentence:
+                    res_word = inv_map[word.cpu().data[0]]
+                    res_sent.append(res_word)
+                toappend = ' '.join(res_sent).strip()
+                if len(toappend) > 0:
+                    res_story.append(toappend)
+            result.append(res_story)
+        return result

@@ -20,6 +20,6 @@ class Trainer():
         settings['num_vocab'] = self.train_data.num_vocab
         settings['cuda'] = False
         memn2n = MemN2N(settings)
-        memn2n.fit(self.train_data)
+        memn2n.fit(self.train_data, self.test_data)
         acc = memn2n.tst(self.test_data)
         print('Final Test Accuracy: {}'.format(acc))
